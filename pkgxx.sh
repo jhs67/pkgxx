@@ -45,6 +45,10 @@ while read key value; do
 	esac
 done < "$base/pkgxx.txt"
 
+# keep track of input files
+declare -a inputs
+inputs+=("$base/pkgxx.txt")
+
 # load dependencies for any submodules
 if which git 1>/dev/null 2>/dev/null && git -C "$base" rev-parse --is-inside-work-tree 1>/dev/null  2>/dev/null; then
 	while read hash path rest; do
@@ -65,6 +69,7 @@ if which git 1>/dev/null 2>/dev/null && git -C "$base" rev-parse --is-inside-wor
 				wanted+=("$value")
 			esac
 		done < "$base/$path/pkgxx.txt"
+		inputs+=("$base/$path/pkgxx.txt")
 	done < <(git -C "$base" submodule status --recursive)
 fi
 
@@ -156,4 +161,10 @@ for i in "${wanted[@]}"; do
     fi
 	echo \#\# installing ${i}
     "$vcpkg" install  --recurse "${i}"
+done
+
+# tell cmake about input files
+echo -n > "$vcpkgdir/pkgxx.cmake"
+for i in "${inputs[@]}"; do
+	echo "set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS \"$i\")" >> "$vcpkgdir/pkgxx.cmake"
 done

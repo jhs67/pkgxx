@@ -11,6 +11,7 @@ if(NOT DEFINED ENV{VCPKG_ROOT})
 		message(FATAL_ERROR "## pkgxx failed")
 	endif()
 
+	include("${CMAKE_SOURCE_DIR}/vcpkg/pkgxx.cmake")
 	set(ENV{VCPKG_ROOT} ${CMAKE_SOURCE_DIR}/vcpkg)
 endif()
 
