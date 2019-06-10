@@ -4,7 +4,13 @@ if(NOT DEFINED ENV{VCPKG_ROOT})
 	execute_process(
 		COMMAND ${CMAKE_CURRENT_LIST_DIR}/pkgxx.sh
 		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+		RESULT_VARIABLE PKGXX_RETURN
 	)
+
+	if(NOT PKGXX_RETURN EQUAL 0)
+		message(FATAL_ERROR "## pkgxx failed")
+	endif()
+
 	set(ENV{VCPKG_ROOT} ${CMAKE_SOURCE_DIR}/vcpkg)
 endif()
 
