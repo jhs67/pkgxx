@@ -33,7 +33,7 @@ parsepackage() {
 
 # take vcpkg name[variant,list] and parse the variant list
 parsevariants() {
-	local q=$(sed -e 's/^[^[]*\[\?//' -e 's/]$//' <<< "$1")
+	local q=$(sed -e 's/^[^[]*//' -e 's/^\[//' -e 's/]$//' <<< "$1")
 	echo $q
 }
 
