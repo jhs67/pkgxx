@@ -264,7 +264,7 @@ scandepends() {
 			continue
 		fi
 
-		local d=$(grep "Default-Features:" $base/vcpkg/ports/$i/CONTROL | sed -e 's/Default-Features://' -e 's/ //')
+		local d=$(grep "Default-Features:" $base/vcpkg/ports/$i/CONTROL | sed -e 's/Default-Features://' -e 's/ //g')
 		if [ -z "$d" ]; then
 			continue
 		fi
