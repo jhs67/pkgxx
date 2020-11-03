@@ -65,7 +65,7 @@ install_cached() {
 
 		log \#\# Bootstrap vcpkg
 
-		("$install_dir/bootstrap-vcpkg.sh" -useSystemBinaries) >&2 || error "Failed to bootstrap vcpkg"
+		("$install_dir/bootstrap-vcpkg.sh") >&2 || error "Failed to bootstrap vcpkg"
 
 	) 21<"$install_dir" || (
 		rm -rf "$install_dir"
