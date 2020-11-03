@@ -24,7 +24,8 @@ fi;
 install_cached() {
 	local src="$1"
 	local hash="$2"
-	local install_dir="$cache_dir/install/$hash"
+	local install_hash=$(echo ":$src:$hash:" | openssl dgst -sha256 -binary | xxd -c 32 -p)
+	local install_dir="$cache_dir/install/$install_hash"
 	mkdir -p "$install_dir"
 
 	(
@@ -66,7 +67,10 @@ install_cached() {
 
 		("$install_dir/bootstrap-vcpkg.sh" -useSystemBinaries) >&2 || error "Failed to bootstrap vcpkg"
 
-	) 21<"$install_dir" || error "Failed to install vcpkg"
+	) 21<"$install_dir" || (
+		rm -rf "$install_dir"
+		error "Failed to install vcpkg"
+	)
 
 	echo -n "$install_dir"
 }
