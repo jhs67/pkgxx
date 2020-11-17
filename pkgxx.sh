@@ -6,7 +6,7 @@ log() {
 }
 
 error() {
-	log $I
+	log $*
 	exit 10
 }
 
@@ -67,10 +67,10 @@ install_cached() {
 
 		("$install_dir/bootstrap-vcpkg.sh") >&2 || error "Failed to bootstrap vcpkg"
 
-	) 21<"$install_dir" || (
+	) 21<"$install_dir" || {
 		rm -rf "$install_dir"
 		error "Failed to install vcpkg"
-	)
+	}
 
 	echo -n "$install_dir"
 }
