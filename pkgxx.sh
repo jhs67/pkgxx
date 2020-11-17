@@ -27,6 +27,10 @@ install_cached() {
 	local install_hash=$(echo ":$src:$hash:" | openssl dgst -sha256 -binary | xxd -c 32 -p)
 	local install_dir="$cache_dir/install/$install_hash"
 	mkdir -p "$install_dir"
+	exec 21>&-
+	exec 22>&-
+	exec 23<&-
+	exec 24<&-
 
 	(
 		# Get an exclusive lock on the install dir
