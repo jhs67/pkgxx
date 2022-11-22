@@ -9,7 +9,7 @@ if(NOT DEFINED ENV{VCPKG_ROOT})
 	string(JSON VCPKG_SHA256 GET ${VCPKG_JSON} "$pkgxx" sha256)
 
 	# install dir
-	string(SHA256 INSTALL_HASH "v2:${VCPKG_URL}:${VCPKG_HASH}:")
+	string(SHA256 INSTALL_HASH "v2:${VCPKG_URL}:${VCPKG_SHA256}:")
 	set(INSTALL_DIR "${PKGXX_CACHE_DIR}/install/${INSTALL_HASH}")
 
 	# lock file
