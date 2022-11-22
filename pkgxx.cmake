@@ -1,7 +1,11 @@
 
 if(NOT DEFINED ENV{VCPKG_ROOT})
 	# Cache location
-	set(PKGXX_CACHE_DIR "$ENV{HOME}/.cache/pkgxx")
+	if(CMAKE_HOST_WIN32)
+		set(PKGXX_CACHE_DIR "$ENV{APPDATA}/pkgxx")
+	else()
+		set(PKGXX_CACHE_DIR "$ENV{HOME}/.cache/pkgxx")
+	endif()
 
 	# load the version and hash from the vcpkg.json file
 	file(READ ${CMAKE_SOURCE_DIR}/vcpkg.json VCPKG_JSON)
