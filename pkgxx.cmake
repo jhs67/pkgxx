@@ -1,132 +1,127 @@
 
+# cache variables
+set(PKGXX_RELEASE_SOURCE "" CACHE STRING "source location for tool release")
+set(PKGXX_TOOL_RELEASE "" CACHE STRING "last install version of the tools")
+
 if(NOT DEFINED ENV{VCPKG_ROOT})
-	# Cache location
-	if(CMAKE_HOST_WIN32)
-		set(PKGXX_CACHE_DIR "$ENV{APPDATA}/pkgxx")
-	else()
-		set(PKGXX_CACHE_DIR "$ENV{HOME}/.cache/pkgxx")
-	endif()
+	# set the tool download source
+	set(TOOL_DOWNLOAD_URL "https://github.com/microsoft/vcpkg-tool/releases/download")
 
-	# load the version and hash from the vcpkg.json file
+	# set the install location
+	set(PKGXX_TOOL_INSTALL_DIR "${CMAKE_BINARY_DIR}/pkgxx_installed")
+	set(INSTALL_DIR "${PKGXX_TOOL_INSTALL_DIR}/vcpkg")
+	file(MAKE_DIRECTORY "${PKGXX_TOOL_INSTALL_DIR}")
+
+	# try to read the tool release from the vcpkg.json file
 	file(READ ${CMAKE_SOURCE_DIR}/vcpkg.json VCPKG_JSON)
-	string(JSON VCPKG_REPOSITORY ERROR_VARIABLE JSON_ERROR GET ${VCPKG_JSON} "$pkgxx" repository)
-
+	string(JSON TOOL_RELEASE_TAG ERROR_VARIABLE JSON_ERROR GET ${VCPKG_JSON} "$pkgxx" tool_release)
 	if(JSON_ERROR)
-		SET(VCPKG_REPOSITORY "")
+		SET(TOOL_RELEASE_TAG "")
 	endif()
 
-	string(JSON VCPKG_BASELINE ERROR_VARIABLE JSON_ERROR GET ${VCPKG_JSON} "$pkgxx" baseline)
-
-	if(JSON_ERROR)
-		SET(VCPKG_BASELINE "")
-	endif()
-
-	# if there is nothing specified, try to load the default-registry
-	if("${VCPKG_REPOSITORY}" STREQUAL "" AND "${VCPKG_BASELINE}" STREQUAL "")
+	# try to get the tool release from the default registry
+	if("${TOOL_RELEASE_TAG}" STREQUAL "")
 		if(EXISTS "${CMAKE_SOURCE_DIR}/vcpkg-configuration.json")
+			# load the default repository and baseline
 			file(READ "${CMAKE_SOURCE_DIR}/vcpkg-configuration.json" VCPKG_CONFIGURATION_JSON)
-			string(JSON VCPKG_REPOSITORY ERROR_VARIABLE JSON_ERROR GET ${VCPKG_CONFIGURATION_JSON} "default-registry" repository)
-
+			string(JSON REPOSITORY ERROR_VARIABLE JSON_ERROR GET ${VCPKG_CONFIGURATION_JSON} "default-registry" repository)
 			if(JSON_ERROR)
-				SET(VCPKG_REPOSITORY "")
+				SET(REPOSITORY "")
+			endif()
+			string(JSON BASELINE ERROR_VARIABLE JSON_ERROR GET ${VCPKG_CONFIGURATION_JSON} "default-registry" baseline)
+			if(JSON_ERROR)
+				SET(BASELINE "")
 			endif()
 
-			string(JSON VCPKG_BASELINE ERROR_VARIABLE JSON_ERROR GET ${VCPKG_CONFIGURATION_JSON} "default-registry" baseline)
+			if(NOT "${REPOSITORY}" STREQUAL "" AND NOT "${BASELINE}" STREQUAL "")
+				# check if we've already downloaded the correct file
+				set(RELEASE_SOURCE "${REPOSITORY}:${BASELINE}")
+				if ("${RELEASE_SOURCE}" STREQUAL "${PKGXX_RELEASE_SOURCE}")
+					set(TOOL_RELEASE_TAG "${PKGXX_TOOL_RELEASE}")
+				endif()
 
-			if(JSON_ERROR)
-				SET(VCPKG_BASELINE "")
+				# no existing value
+				if("${TOOL_RELEASE_TAG}" STREQUAL "")
+					# just assume I can download a file using the github schema
+					file(DOWNLOAD "${REPOSITORY}/raw/${BASELINE}/scripts/vcpkg-tool-metadata.txt"
+						"${PKGXX_TOOL_INSTALL_DIR}/vcpkg-tool-metadata.txt" STATUS DOWNLOAD_STATUS)
+					list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
+					if (STATUS_CODE EQUAL 0)
+						file(READ "${PKGXX_TOOL_INSTALL_DIR}/vcpkg-tool-metadata.txt" METADATA_CONTENT)
+						string(REGEX MATCH "VCPKG_TOOL_RELEASE_TAG=([^\n]*)" LINE_MATCH "${METADATA_CONTENT}")
+						if (LINE_MATCH)
+							set(TOOL_RELEASE_TAG ${CMAKE_MATCH_1})
+							set(PKGXX_RELEASE_SOURCE "${RELEASE_SOURCE}" CACHE STRING "" FORCE)
+						endif()
+					endif()
+				endif()
 			endif()
 		endif()
 	endif()
 
-	# error out if not set
-	if("${VCPKG_REPOSITORY}" STREQUAL "" OR "${VCPKG_BASELINE}" STREQUAL "")
-		message(FATAL_ERROR "feiled to load pkgxx configuration")
+	if (TOOL_RELEASE_TAG STREQUAL "")
+		message(FATAL_ERROR "Failed to get tool release version")
 	endif()
-
-	# set the install dir
-	string(REGEX REPLACE "[^a-zA-Z0-9_]+" "_" INSTALL_BASE_NAME "${VCPKG_REPOSITORY}")
-
-	# install dir
-	string(SHA256 INSTALL_HASH "v3:${VCPKG_REPOSITORY}:${VCPKG_BASELINE}:")
-	set(INSTALL_DIR "${PKGXX_CACHE_DIR}/install/${INSTALL_BASE_NAME}-${VCPKG_BASELINE}")
-
-	# lock file
-	set(LOCK_FILE "${PKGXX_CACHE_DIR}/lock/${INSTALL_HASH}.lock")
-	file(LOCK "${LOCK_FILE}" GUARD FILE TIMEOUT 300)
 
 	# check the executable
-	set(VCPKG_EXECUTABLE "${INSTALL_DIR}/vcpkg")
+	set(VCPKG_EXECUTABLE "${INSTALL_DIR}/vcpkg${CMAKE_HOST_EXECUTABLE_SUFFIX}")
 
-	if(CMAKE_HOST_WIN32)
-		set(VCPKG_EXECUTABLE "${INSTALL_DIR}/vcpkg.exe")
-	endif()
-
-	if(NOT EXISTS "${VCPKG_EXECUTABLE}")
-		message("## pkgxx: install vcpkg from ${VCPKG_REPOSITORY}")
+	# check the correct version is correctly installed
+	if(NOT "${TOOL_RELEASE_TAG}" STREQUAL "${PKGXX_TOOL_RELEASE}" OR NOT EXISTS "${VCPKG_EXECUTABLE}")
+		message("## pkgxx: install vcpkg tools version ${TOOL_RELEASE_TAG}")
 		message("## pkgxx: installation target: ${INSTALL_DIR}")
 
 		# clean up any invalid install
 		file(REMOVE_RECURSE "${INSTALL_DIR}")
+		file(MAKE_DIRECTORY "${INSTALL_DIR}")
 
-		execute_process(
-			COMMAND git clone "${VCPKG_REPOSITORY}" "${INSTALL_DIR}"
-			RESULT_VARIABLE CLONE_RETURN
-			COMMAND_ECHO STDOUT
-		)
-
-		# check the clone result
-		if(NOT CLONE_RETURN EQUAL 0)
-			# clean up
-			file(REMOVE_RECURSE "${INSTALL_DIR}")
-			file(LOCK "${LOCK_FILE}" RELEASE)
-			file(REMOVE "${LOCK_FILE}")
-			message(FATAL_ERROR "## pkgxx clone failed")
+		# Download the standalone bootstrap file
+		set(BOOTSTRAP_URL "${TOOL_DOWNLOAD_URL}/${TOOL_RELEASE_TAG}/vcpkg-standalone-bundle.tar.gz")
+		set(BOOTSTRAP_FILE "${PKGXX_TOOL_INSTALL_DIR}/vcpkg-standalone-bundle.tar.gz")
+		file(DOWNLOAD "${BOOTSTRAP_URL}" "${BOOTSTRAP_FILE}" STATUS DOWNLOAD_STATUS)
+		list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
+		if (NOT STATUS_CODE EQUAL 0)
+			list(GET DOWNLOAD_STATUS 0 ERROR_MESSAGE)
+			message(FATAL_ERROR "failed to download bootstrap archive: ${ERROR_MESSAGE}")
 		endif()
 
+		# Extract the archive
 		execute_process(
-			COMMAND git -C "${INSTALL_DIR}" reset --hard "${VCPKG_BASELINE}"
-			RESULT_VARIABLE RESET_RETURN
-			COMMAND_ECHO STDOUT
-		)
-
-		# check the reset result
-		if(NOT RESET_RETURN EQUAL 0)
-			# clean up
-			file(REMOVE_RECURSE "${INSTALL_DIR}")
-			file(LOCK "${LOCK_FILE}" RELEASE)
-			file(REMOVE "${LOCK_FILE}")
-			message(FATAL_ERROR "## pkgxx clone failed")
-		endif()
-
-		# bootstrap the vcpkg folder
-		set(BOOTSTRAP_FILE "${INSTALL_DIR}/bootstrap-vcpkg.sh")
-
-		if(CMAKE_HOST_WIN32)
-			set(BOOTSTRAP_FILE "${INSTALL_DIR}/bootstrap-vcpkg.bat")
-		endif()
-
-		execute_process(
-			COMMAND ${BOOTSTRAP_FILE}
-			WORKING_DIRECTORY ${INSTALL_DIR}
+			COMMAND ${CMAKE_COMMAND} -E tar xzf "${BOOTSTRAP_FILE}"
+			WORKING_DIRECTORY "${INSTALL_DIR}"
 			RESULT_VARIABLE BOOTSTRAP_RETURN
-			COMMAND_ECHO STDOUT
 		)
-
-		# check the bootstrap result
-		if(NOT BOOTSTRAP_RETURN EQUAL 0)
-			# clean up
-			file(REMOVE_RECURSE "${INSTALL_DIR}")
-			file(LOCK "${LOCK_FILE}" RELEASE)
-			file(REMOVE "${LOCK_FILE}")
-			message(FATAL_ERROR "## pkgxx bootstrap failed")
+		if (NOT BOOTSTRAP_RETURN EQUAL 0)
+			message(FATAL_ERROR "failed to extract bootstrap archive")
 		endif()
+
+		# figure the correct executable for the host
+		set(EXECUTABLE_SOURCE vcpkg-glibc)
+		if (CMAKE_HOST_WIN32)
+			set(EXECUTABLE_SOURCE vcpkg.exe)
+		elseif((CMAKE_HOST_APPLE))
+			set(EXECUTABLE_SOURCE vcpkg-macos)
+		endif()
+
+		# download the executable
+		file(DOWNLOAD "${TOOL_DOWNLOAD_URL}/${TOOL_RELEASE_TAG}/${EXECUTABLE_SOURCE}" "${VCPKG_EXECUTABLE}")
+
+		# flag the file as executable
+		if (NOT CMAKE_HOST_WIN32)
+			execute_process(
+				COMMAND chmod a+x "${VCPKG_EXECUTABLE}"
+				RESULT_VARIABLE CHMOD_RESULT
+			)
+			if (NOT CHMOD_RESULT EQUAL 0)
+				message(FATAL_ERROR "failed to set executable flag")
+			endif()
+		endif()
+
+		# set the release tag
+		set(PKGXX_TOOL_RELEASE "${TOOL_RELEASE_TAG}" CACHE STRING "" FORCE)
 	endif()
 
-	# clean up the lock
-	file(LOCK "${LOCK_FILE}" RELEASE)
-	file(REMOVE "${LOCK_FILE}")
-
+	# set the vcpkg root
 	set(ENV{VCPKG_ROOT} "${INSTALL_DIR}")
 endif()
 
