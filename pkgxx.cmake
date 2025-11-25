@@ -75,26 +75,6 @@ if(NOT DEFINED ENV{VCPKG_ROOT})
 		file(REMOVE_RECURSE "${INSTALL_DIR}")
 		file(MAKE_DIRECTORY "${INSTALL_DIR}")
 
-		# Download the standalone bootstrap file
-		set(BOOTSTRAP_URL "${TOOL_DOWNLOAD_URL}/${TOOL_RELEASE_TAG}/vcpkg-standalone-bundle.tar.gz")
-		set(BOOTSTRAP_FILE "${PKGXX_TOOL_INSTALL_DIR}/vcpkg-standalone-bundle.tar.gz")
-		file(DOWNLOAD "${BOOTSTRAP_URL}" "${BOOTSTRAP_FILE}" STATUS DOWNLOAD_STATUS)
-		list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
-		if (NOT STATUS_CODE EQUAL 0)
-			list(GET DOWNLOAD_STATUS 0 ERROR_MESSAGE)
-			message(FATAL_ERROR "failed to download bootstrap archive: ${ERROR_MESSAGE}")
-		endif()
-
-		# Extract the archive
-		execute_process(
-			COMMAND ${CMAKE_COMMAND} -E tar xzf "${BOOTSTRAP_FILE}"
-			WORKING_DIRECTORY "${INSTALL_DIR}"
-			RESULT_VARIABLE BOOTSTRAP_RETURN
-		)
-		if (NOT BOOTSTRAP_RETURN EQUAL 0)
-			message(FATAL_ERROR "failed to extract bootstrap archive")
-		endif()
-
 		# figure the correct executable for the host
 		set(EXECUTABLE_SOURCE vcpkg-glibc)
 		if (CMAKE_HOST_WIN32)
@@ -115,6 +95,17 @@ if(NOT DEFINED ENV{VCPKG_ROOT})
 			if (NOT CHMOD_RESULT EQUAL 0)
 				message(FATAL_ERROR "failed to set executable flag")
 			endif()
+		endif()
+
+		# bootstrap the standalone environment
+		set(ENV{VCPKG_ROOT} "${INSTALL_DIR}")
+		execute_process(
+			COMMAND ${VCPKG_EXECUTABLE} bootstrap-standalone
+			WORKING_DIRECTORY "${INSTALL_DIR}"
+			RESULT_VARIABLE BOOTSTRAP_RETURN
+		)
+		if (NOT BOOTSTRAP_RETURN EQUAL 0)
+			message(FATAL_ERROR "failed to extract bootstrap archive")
 		endif()
 
 		# set the release tag
